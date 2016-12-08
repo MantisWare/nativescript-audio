@@ -63,16 +63,22 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
 
             reject();
           }
-
-          this._completeCallback = options.completeCallback;
-          this._errorCallback = options.errorCallback;
-          this._infoCallback = options.infoCallback;
-
-          this._player = (<any>AVAudioPlayer.alloc()).initWithDataError(data, null);
-          this._player.delegate = this;
-          this._player.numberOfLoops = options.loop ? -1 : 0;
-          this._player.play();
-          resolve();
+          try {
+            this._completeCallback = options.completeCallback;
+            this._errorCallback = options.errorCallback;
+            this._infoCallback = options.infoCallback;
+            
+            this._player = (<any>AVAudioPlayer.alloc()).initWithDataError(data);
+            this._player.delegate = this;
+            this._player.numberOfLoops = options.loop ? -1 : 0;
+            this._player.play();
+            resolve();
+          } catch (ex) {
+            if (this._errorCallback) {
+              this._errorCallback({ ex });
+            }
+            reject(ex);
+          }
         });
 
         this._task.resume();
