@@ -52,36 +52,15 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
   public playFromUrl(options: AudioPlayerOptions): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
-        let sharedSession = utils.ios.getter(NSURLSession, NSURLSession.sharedSession);
-
-        this._task = sharedSession.dataTaskWithURLCompletionHandler(NSURL.URLWithString(options.audioFile), (data, response, error) => {
-          if (error !== null) {
-
-            if (this._errorCallback) {
-              this._errorCallback({ error });
-            }
-
-            reject();
-          }
-          try {
-            this._completeCallback = options.completeCallback;
-            this._errorCallback = options.errorCallback;
-            this._infoCallback = options.infoCallback;
+        this._completeCallback = options.completeCallback;
+        this._errorCallback = options.errorCallback;
+        this._infoCallback = options.infoCallback;
             
-            this._player = (<any>AVAudioPlayer.alloc()).initWithDataError(data);
-            this._player.delegate = this;
-            this._player.numberOfLoops = options.loop ? -1 : 0;
-            this._player.play();
-            resolve();
-          } catch (ex) {
-            if (this._errorCallback) {
-              this._errorCallback({ ex });
-            }
-            reject(ex);
-          }
-        });
-
-        this._task.resume();
+        this._player = (<any>AVPlayer.alloc()).initWithURL(NSURL.URLWithString(options.audioFile));
+        this._player.delegate = this;
+        this._player.numberOfLoops = options.loop ? -1 : 0;
+        this._player.play();
+        resolve();
 
       } catch (ex) {
         if (this._errorCallback) {
