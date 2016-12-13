@@ -10,6 +10,8 @@ var TNSPlayer = (function (_super) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             try {
+                AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
+                AVAudioSession.sharedInstance().setActiveError(true);
                 var audioPath = void 0;
                 var fileName = types_1.isString(options.audioFile) ? options.audioFile.trim() : "";
                 if (fileName.indexOf("~/") === 0) {
@@ -38,6 +40,8 @@ var TNSPlayer = (function (_super) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             try {
+                AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
+                AVAudioSession.sharedInstance().setActiveError(true);
                 _this._completeCallback = options.completeCallback;
                 _this._errorCallback = options.errorCallback;
                 _this._infoCallback = options.infoCallback;
@@ -110,10 +114,10 @@ var TNSPlayer = (function (_super) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             try {
-                if (_this._player && _this.isAudioPlaying()) {
-                    _this._player.stop();
-                }
-                _this.reset();
+                _this._player.stop();
+                _this._player.release();
+                _this._player = undefined;
+                AVAudioSession.sharedInstance().setActiveError(false);
                 resolve();
             }
             catch (ex) {
@@ -148,17 +152,6 @@ var TNSPlayer = (function (_super) {
         }
         else if (!flag && this._errorCallback) {
             this._errorCallback({ player: player, flag: flag });
-        }
-        this.reset();
-    };
-    TNSPlayer.prototype.reset = function () {
-        if (this._player) {
-            this._player.release();
-            this._player = undefined;
-        }
-        if (this._task) {
-            this._task.cancel();
-            this._task = undefined;
         }
     };
     Object.defineProperty(TNSPlayer.prototype, "currentTime", {

@@ -10,7 +10,6 @@ declare var NSURLSession, AVAudioPlayer, NSURL, AVAudioPlayerDelegate;
 export class TNSPlayer extends NSObject implements TNSPlayerI {
   public static ObjCProtocols = [AVAudioPlayerDelegate];
   private _player: AVAudioPlayer;
-  private _task: any;
   private _completeCallback: any;
   private _errorCallback: any;
   private _infoCallback: any;
@@ -18,6 +17,10 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
   public playFromFile(options: AudioPlayerOptions): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
+
+        AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
+        AVAudioSession.sharedInstance().setActiveError(true);
+
         let audioPath;
 
         let fileName = isString(options.audioFile) ? options.audioFile.trim() : "";
@@ -52,6 +55,10 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
   public playFromUrl(options: AudioPlayerOptions): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
+
+        AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
+        AVAudioSession.sharedInstance().setActiveError(true);
+
         this._completeCallback = options.completeCallback;
         this._errorCallback = options.errorCallback;
         this._infoCallback = options.infoCallback;
@@ -123,10 +130,10 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
   public dispose(): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
-        if (this._player && this.isAudioPlaying()) {
-          this._player.stop();
-        }
-        this.reset();
+        this._player.stop();
+        this._player.release();
+        this._player = undefined;
+        AVAudioSession.sharedInstance().setActiveError(false);
         resolve();
       } catch (ex) {
         if (this._errorCallback) {
@@ -161,18 +168,6 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
     }
     else if (!flag && this._errorCallback) {
       this._errorCallback({ player, flag });
-    }
-    this.reset();
-  }
-
-  private reset() {
-    if (this._player) {
-      this._player.release();
-      this._player = undefined;
-    }
-    if (this._task) {
-      this._task.cancel();
-      this._task = undefined;
     }
   }
 
