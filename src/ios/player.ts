@@ -1,165 +1,93 @@
-import * as app from 'application';
-import { isString } from 'utils/types';
-import { knownFolders, path } from 'file-system';
 import { TNSPlayerI } from '../common';
 import { AudioPlayerOptions } from '../options';
-var utils = require('utils/utils');
+import fs = require('file-system');
 
-declare var NSURLSession, AVAudioPlayer, NSURL, AVAudioPlayerDelegate;
+function fixPath(pathStr: string) {
+  pathStr = pathStr.trim()
+  return (pathStr.indexOf("~/") === 0) ? fs.path.join(fs.knownFolders.currentApp().path, pathStr.replace("~/", "")) : pathStr;
+}
 
 export class TNSPlayer extends NSObject implements TNSPlayerI {
-  public static ObjCProtocols = [AVAudioPlayerDelegate];
-  private _player: AVAudioPlayer;
+  private player: AVPlayer;
+
+  get ios(): any {
+    return this.player;
+  }
+
   private _completeCallback: any;
   private _errorCallback: any;
   private _infoCallback: any;
 
-  public playFromFile(options: AudioPlayerOptions): Promise<any> {
+  private _playResolve;
+  private _playReject;
+
+  public playFile(options: AudioPlayerOptions): Promise<any> {
+    this.dispose().catch(() => { });
     return new Promise((resolve, reject) => {
-      try {
+      this._playReject = reject;
+      this._playResolve = resolve;
+      this._completeCallback = options.completeCallback;
+      this._errorCallback = options.errorCallback;
+      this._infoCallback = options.positionUpdateCallback;
 
-        AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
-        AVAudioSession.sharedInstance().setActiveError(true);
+      this.player = (<any>AVPlayer.alloc()).initWithURL(NSURL.URLWithString(fixPath(options.audioFile)));
 
-        let audioPath;
+      if (options.positionUpdateCallback)
+        this.player.addPeriodicTimeObserverForIntervalQueueUsingBlock(CMTimeMakeWithSeconds(1, 1), null, time => options.positionUpdateCallback && options.positionUpdateCallback(CMTimeGetSeconds(time)));
 
-        let fileName = isString(options.audioFile) ? options.audioFile.trim() : "";
-        if (fileName.indexOf("~/") === 0) {
-          fileName = path.join(knownFolders.currentApp().path, fileName.replace("~/", ""))
-        }
+      this.player.currentItem.addObserverForKeyPathOptionsContext(this, "status", NSKeyValueObservingOptions.Initial, null);
 
-        this._completeCallback = options.completeCallback;
-        this._errorCallback = options.errorCallback;
-        this._infoCallback = options.infoCallback;
-
-        this._player = AVAudioPlayer.alloc().initWithContentsOfURLError(NSURL.fileURLWithPath(fileName));
-        this._player.delegate = this;
-
-        if (options.loop) {
-          this._player.numberOfLoops = -1;
-        }
-
-        this._player.play();
-
-        resolve();
-
-      } catch (ex) {
-        if (this._errorCallback) {
-          this._errorCallback({ ex });
-        }
-        reject(ex);
-      }
+      this.player.play();
     });
   }
 
-  public playFromUrl(options: AudioPlayerOptions): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-
-        AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
-        AVAudioSession.sharedInstance().setActiveError(true);
-
-        this._completeCallback = options.completeCallback;
-        this._errorCallback = options.errorCallback;
-        this._infoCallback = options.infoCallback;
-            
-        this._player = (<any>AVPlayer.alloc()).initWithURL(NSURL.URLWithString(options.audioFile));
-        this._player.delegate = this;
-        this._player.numberOfLoops = options.loop ? -1 : 0;
-        this._player.play();
-        resolve();
-
-      } catch (ex) {
-        if (this._errorCallback) {
-          this._errorCallback({ ex });
-        }
-        reject(ex);
+  observeValueForKeyPathOfObjectChangeContext(keypath: string, source: Object, change: any, context: Object) {
+    if(this._playResolve && this._playReject && keypath == "status") {
+      if(this.player.currentItem.status == AVPlayerItemStatus.ReadyToPlay) {
+        this._playResolve();
+        this._playResolve = this._playReject = null;
       }
-    });
+      else if(this.player.currentItem.status == AVPlayerItemStatus.Failed) {
+        this._playReject(this.player.error);
+        this._playResolve = this._playReject = null;
+      }
+    }
   }
 
   public pause(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        if (this._player && this._player.playing) {
-          this._player.pause();
-          resolve(true);
-        }
-      } catch (ex) {
-        if (this._errorCallback) {
-          this._errorCallback({ ex });
-        }
-        reject(ex);
-      }
-    });
+    return new Promise((resolve, reject) => resolve(<any>this.player.pause()));
   }
 
   public play(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        if (!this.isAudioPlaying()) {
-          this._player.play();
-          resolve(true);
-        }
-      } catch (ex) {
-        if (this._errorCallback) {
-          this._errorCallback({ ex });
-        }
-        reject(ex);
-      }
-    });
+    return new Promise((resolve, reject) => resolve(<any>this.player.play()));
   }
 
-  public resume(): void {
-    this._player.play();
+  public resume(): Promise<any> {
+    return this.play();
   }
 
   public seekTo(time: number): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        if (this._player) {
-          this._player.currentTime = time;
-          resolve(true);
-        }
-      } catch (ex) {
-        reject(ex);
-      }
-    });
+    return Promise.reject(null);
   }
 
   public dispose(): Promise<any> {
     return new Promise((resolve, reject) => {
-      try {
-        this._player.stop();
-        this._player.release();
-        this._player = undefined;
-        AVAudioSession.sharedInstance().setActiveError(false);
-        resolve();
-      } catch (ex) {
-        if (this._errorCallback) {
-          this._errorCallback({ ex });
-        }
-        reject(ex);
+      if(this.player) {
+        this.player.pause();
+        this.player.currentItem.removeObserverForKeyPath(this, "status");
+        this.player.replaceCurrentItemWithPlayerItem(null);
       }
+      this.player = null;
+      resolve();
     });
   }
 
   public isAudioPlaying(): boolean {
-    return this._player ? this._player.playing : false;
+    return (this.player.rate != 0) && (this.player.error == null);
   }
 
-  public getAudioTrackDuration(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      try {
-        var duration = this._player ? this._player.duration : 0;
-        resolve(duration.toString());
-      } catch (ex) {
-        if (this._errorCallback) {
-          this._errorCallback({ ex });
-        }
-        reject(ex);
-      }
-    });
+  public getDuration(): Promise<number> {
+    return new Promise((resolve, reject) => resolve(this.player.currentItem.duration));
   }
 
   public audioPlayerDidFinishPlayingSuccessfully(player?: any, flag?: boolean) {
@@ -172,6 +100,6 @@ export class TNSPlayer extends NSObject implements TNSPlayerI {
   }
 
   public get currentTime(): number {
-    return this._player ? this._player.currentTime : 0;
+    return CMTimeGetSeconds(this.player.currentTime());
   }
 }

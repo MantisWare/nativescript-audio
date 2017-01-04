@@ -1,15 +1,14 @@
 import {AudioPlayerOptions, AudioRecorderOptions} from './options';
 
 export interface TNSPlayerI {
-  /**
-   * Starts playing audio file from local app files.
-   */
-  playFromFile(options: AudioPlayerOptions): Promise<any>;
+
+  android?: any;
+  ios?: any;
 
   /**
-  * Starts playing audio file from url
-  */
-  playFromUrl(options: AudioPlayerOptions): Promise<any>;
+   * Loads and starts playing an audio file
+   */
+  playFile(options: AudioPlayerOptions): Promise<any>;
 
   /**
    * Play audio file.
@@ -27,7 +26,7 @@ export interface TNSPlayerI {
   seekTo(time: number): Promise<boolean>;
 
   /**
-   * Releases resources from the audio player.
+   * Stops playback and releases resources from the audio player.
    */
   dispose(): Promise<boolean>;
 
@@ -37,9 +36,9 @@ export interface TNSPlayerI {
   isAudioPlaying(): boolean;
 
   /**
-   * Get the duration of the audio file playing.
+   * Get the duration of the audio file playing in seconds.
    */
-  getAudioTrackDuration(): Promise<string>;
+  getDuration(): Promise<number>;
 }
 
 export interface TNSRecordI {

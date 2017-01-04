@@ -1,8 +1,10 @@
-var types_1 = require('utils/types');
 var fs = require('file-system');
+function fixPath(pathStr) {
+    pathStr = pathStr.trim();
+    return (pathStr.indexOf("~/") === 0) ? fs.path.join(fs.knownFolders.currentApp().path, pathStr.replace("~/", "")) : pathStr;
+}
 var TNSPlayer = (function () {
     function TNSPlayer() {
-        this.player = new android.media.MediaPlayer();
     }
     Object.defineProperty(TNSPlayer.prototype, "android", {
         get: function () {
@@ -11,190 +13,74 @@ var TNSPlayer = (function () {
         enumerable: true,
         configurable: true
     });
-    TNSPlayer.prototype.playFromFile = function (options) {
+    TNSPlayer.prototype.playFile = function (options) {
         var _this = this;
+        this.dispose().catch(function () { });
         return new Promise(function (resolve, reject) {
-            try {
-                var MediaPlayer = android.media.MediaPlayer;
-                var audioPath = void 0;
-                var fileName = types_1.isString(options.audioFile) ? options.audioFile.trim() : "";
-                if (fileName.indexOf("~/") === 0) {
-                    fileName = fs.path.join(fs.knownFolders.currentApp().path, fileName.replace("~/", ""));
-                    audioPath = fileName;
-                }
-                else {
-                    audioPath = fileName;
-                }
-                _this.player = new MediaPlayer();
-                _this.player.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
-                _this.player.setDataSource(audioPath);
-                _this.player.prepareAsync();
-                if (options.completeCallback) {
-                    _this.player.setOnCompletionListener(new MediaPlayer.OnCompletionListener({
-                        onCompletion: function (mp) {
-                            if (options.loop === true) {
-                                mp.seekTo(5);
-                                mp.start();
-                            }
-                            options.completeCallback({ mp: mp });
-                        }
-                    }));
-                }
-                if (options.errorCallback) {
-                    _this.player.setOnErrorListener(new MediaPlayer.OnErrorListener({
-                        onError: function (mp, what, extra) {
-                            options.errorCallback({ mp: mp, what: what, extra: extra });
-                            return true;
-                        }
-                    }));
-                }
-                if (options.infoCallback) {
-                    _this.player.setOnInfoListener(new MediaPlayer.OnInfoListener({
-                        onInfo: function (mp, what, extra) {
-                            options.infoCallback({ mp: mp, what: what, extra: extra });
-                            return true;
-                        }
-                    }));
-                }
-                _this.player.setOnPreparedListener(new MediaPlayer.OnPreparedListener({
-                    onPrepared: function (mp) {
+            _this.player = new android.media.MediaPlayer();
+            _this.player.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
+            _this.player.setDataSource(fixPath(options.audioFile));
+            _this.player.prepareAsync();
+            _this.player.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener({
+                onCompletion: function (mp) {
+                    if (options.loop) {
+                        mp.seekTo(5);
                         mp.start();
-                        resolve();
                     }
-                }));
-            }
-            catch (ex) {
-                reject(ex);
-            }
-        });
-    };
-    TNSPlayer.prototype.playFromUrl = function (options) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                var MediaPlayer = android.media.MediaPlayer;
-                _this.player = new MediaPlayer();
-                _this.player.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
-                _this.player.setDataSource(options.audioFile);
-                _this.player.prepareAsync();
-                if (options.completeCallback) {
-                    _this.player.setOnCompletionListener(new MediaPlayer.OnCompletionListener({
-                        onCompletion: function (mp) {
-                            if (options.loop === true) {
-                                mp.seekTo(5);
-                                mp.start();
-                            }
-                            options.completeCallback({ mp: mp });
-                        }
-                    }));
-                }
-                if (options.errorCallback) {
-                    _this.player.setOnErrorListener(new MediaPlayer.OnErrorListener({
-                        onError: function (mp, what, extra) {
-                            options.errorCallback({ mp: mp, what: what, extra: extra });
-                            return true;
-                        }
-                    }));
-                }
-                if (options.infoCallback) {
-                    _this.player.setOnInfoListener(new MediaPlayer.OnInfoListener({
-                        onInfo: function (mp, what, extra) {
-                            options.infoCallback({ mp: mp, what: what, extra: extra });
-                            return true;
-                        }
-                    }));
-                }
-                _this.player.setOnPreparedListener(new MediaPlayer.OnPreparedListener({
-                    onPrepared: function (mp) {
-                        mp.start();
-                        resolve();
+                    if (options.completeCallback) {
+                        options.completeCallback();
                     }
-                }));
+                }
+            }));
+            _this.player.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener({
+                onError: function (mp, what, extra) {
+                    if (options.errorCallback) {
+                        options.errorCallback(new Error("Audio playback error: " + what + "-" + extra));
+                    }
+                    _this.dispose();
+                    return true;
+                }
+            }));
+            if (options.positionUpdateCallback) {
             }
-            catch (ex) {
-                reject(ex);
-            }
+            _this.player.setOnPreparedListener(new android.media.MediaPlayer.OnPreparedListener({
+                onPrepared: function (mp) {
+                    mp.start();
+                    resolve();
+                }
+            }));
         });
     };
     TNSPlayer.prototype.pause = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                if (_this.player.isPlaying()) {
-                    _this.player.pause();
-                    resolve(true);
-                }
-            }
-            catch (ex) {
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.pause()); });
     };
     TNSPlayer.prototype.play = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                if (!_this.player.isPlaying()) {
-                    _this.player.start();
-                    resolve(true);
-                }
-            }
-            catch (ex) {
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.start()); });
     };
     TNSPlayer.prototype.resume = function () {
-        this.player.start();
+        return this.play();
     };
     TNSPlayer.prototype.seekTo = function (time) {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                if (_this.player) {
-                    _this.player.seekTo(time);
-                    resolve(true);
-                }
-            }
-            catch (ex) {
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.seekTo(time)); });
     };
     TNSPlayer.prototype.dispose = function () {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            try {
-                _this.player.release();
-                resolve();
-            }
-            catch (ex) {
-                reject(ex);
-            }
+            _this.player && _this.player.release();
+            _this.player = null;
+            resolve();
         });
     };
     TNSPlayer.prototype.isAudioPlaying = function () {
         return this.player.isPlaying();
     };
-    TNSPlayer.prototype.getAudioTrackDuration = function () {
+    TNSPlayer.prototype.getDuration = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                var duration = _this.player.getDuration();
-                resolve(duration.toString());
-            }
-            catch (ex) {
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.getDuration()); });
     };
-    Object.defineProperty(TNSPlayer.prototype, "currentTime", {
-        get: function () {
-            return this.player ? this.player.getCurrentPosition() : 0;
-        },
-        enumerable: true,
-        configurable: true
-    });
     return TNSPlayer;
 }());
 exports.TNSPlayer = TNSPlayer;

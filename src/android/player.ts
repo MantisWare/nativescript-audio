@@ -1,208 +1,91 @@
-import { isString } from 'utils/types';
 import { TNSPlayerI } from '../common';
 import { AudioPlayerOptions } from '../options';
-import * as app from 'application';
-import * as utils from 'utils/utils';
-import * as fs from 'file-system';
-import * as enums from 'ui/enums';
+import fs = require('file-system');
 
-declare var android: any
+function fixPath(pathStr: string) {
+  pathStr = pathStr.trim()
+  return (pathStr.indexOf("~/") === 0) ? fs.path.join(fs.knownFolders.currentApp().path, pathStr.replace("~/", "")) : pathStr;
+}
 
 export class TNSPlayer implements TNSPlayerI {
-  private player: any;
+  private player: android.media.MediaPlayer;
 
   get android(): any {
     return this.player;
   }
 
-  constructor() {
-    this.player = new android.media.MediaPlayer();
-  }
-
-  public playFromFile(options: AudioPlayerOptions): Promise<any> {
+  public playFile(options: AudioPlayerOptions): Promise<any> {
+    this.dispose().catch(() => { });
     return new Promise((resolve, reject) => {
-      try {
-        let MediaPlayer = android.media.MediaPlayer;
-        let audioPath;
+      this.player = new android.media.MediaPlayer();
 
-        let fileName = isString(options.audioFile) ? options.audioFile.trim() : "";
-        if (fileName.indexOf("~/") === 0) {
-          fileName = fs.path.join(fs.knownFolders.currentApp().path, fileName.replace("~/", ""));
-          audioPath = fileName;
-        }
-        else {
-          audioPath = fileName;
-        }
+      this.player.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
+      this.player.setDataSource(fixPath(options.audioFile));
+      this.player.prepareAsync();
 
-        this.player = new MediaPlayer();
+      // On Complete
+      this.player.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener({
+        onCompletion: (mp) => {
 
-        this.player.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
-        this.player.setDataSource(audioPath);
-        this.player.prepareAsync();
-
-        // On Complete
-        if (options.completeCallback) {
-          this.player.setOnCompletionListener(new MediaPlayer.OnCompletionListener({
-            onCompletion: (mp) => {
-
-              if (options.loop === true) {
-                mp.seekTo(5);
-                mp.start();
-              }
-
-              options.completeCallback({ mp });
-
-            }
-          }));
-        }
-
-        // On Error
-        if (options.errorCallback) {
-          this.player.setOnErrorListener(new MediaPlayer.OnErrorListener({
-            onError: (mp: any, what: number, extra: number) => {
-              options.errorCallback({ mp, what, extra });
-              return true;
-            }
-          }));
-        }
-
-        // On Info
-        if (options.infoCallback) {
-          this.player.setOnInfoListener(new MediaPlayer.OnInfoListener({
-            onInfo: (mp: any, what: number, extra: number) => {
-              options.infoCallback({ mp, what, extra });
-              return true;
-            }
-          }))
-        }
-
-        // On Prepared
-        this.player.setOnPreparedListener(new MediaPlayer.OnPreparedListener({
-          onPrepared: (mp) => {
+          if (options.loop) {
+            mp.seekTo(5);
             mp.start();
-            resolve();
           }
-        }));
 
-      } catch (ex) {
-        reject(ex);
-      }
-    });
-  }
-
-  public playFromUrl(options: AudioPlayerOptions): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        let MediaPlayer = android.media.MediaPlayer;
-
-        this.player = new MediaPlayer();
-
-        this.player.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
-        this.player.setDataSource(options.audioFile);
-        this.player.prepareAsync();
-
-        // On Complete
-        if (options.completeCallback) {
-          this.player.setOnCompletionListener(new MediaPlayer.OnCompletionListener({
-            onCompletion: (mp) => {
-
-              if (options.loop === true) {
-                mp.seekTo(5);
-                mp.start();
-              }
-
-              options.completeCallback({ mp });
-
-            }
-          }));
-        }
-
-        // On Error
-        if (options.errorCallback) {
-          this.player.setOnErrorListener(new MediaPlayer.OnErrorListener({
-            onError: (mp: any, what: number, extra: number) => {
-              options.errorCallback({ mp, what, extra });
-              return true;
-            }
-          }));
-        }
-
-        // On Info
-        if (options.infoCallback) {
-          this.player.setOnInfoListener(new MediaPlayer.OnInfoListener({
-            onInfo: (mp: any, what: number, extra: number) => {
-              options.infoCallback({ mp, what, extra });
-              return true;
-            }
-          }))
-        }
-
-        // On Prepared
-        this.player.setOnPreparedListener(new MediaPlayer.OnPreparedListener({
-          onPrepared: (mp) => {
-            mp.start();
-            resolve();
+          if (options.completeCallback) {
+            options.completeCallback();
           }
-        }));
 
-      } catch (ex) {
-        reject(ex);
+        }
+      }));
+
+      // On Error
+      this.player.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener({
+        onError: (mp: any, what: number, extra: number) => {
+          if (options.errorCallback) {
+            options.errorCallback(new Error(`Audio playback error: ${what}-${extra}`));
+          }
+          this.dispose();
+          return true;
+        }
+      }));
+
+      // On Position Updated
+      if (options.positionUpdateCallback) {
+        
       }
+
+      // On Prepared
+      this.player.setOnPreparedListener(new android.media.MediaPlayer.OnPreparedListener({
+        onPrepared: (mp) => {
+          mp.start();
+          resolve();
+        }
+      }));
     });
   }
 
   public pause(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        if (this.player.isPlaying()) {
-          this.player.pause();
-          resolve(true);
-        }
-      } catch (ex) {
-        reject(ex);
-      }
-    });
+    return new Promise((resolve, reject) => resolve(<any>this.player.pause()));
   }
 
   public play(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        if (!this.player.isPlaying()) {
-          this.player.start();
-          resolve(true);
-        }
-      } catch (ex) {
-        reject(ex);
-      }
-    });
+    return new Promise((resolve, reject) => resolve(<any>this.player.start()));
   }
 
-  public resume(): void {
-    this.player.start();
+  public resume(): Promise<any> {
+    return this.play();
   }
-
 
   public seekTo(time: number): Promise<any> {
-    return new Promise((resolve, reject) => {
-      try {
-        if (this.player) {
-          this.player.seekTo(time);
-          resolve(true);
-        }
-      } catch (ex) {
-        reject(ex);
-      }
-    });
+    return new Promise((resolve, reject) => resolve(<any>this.player.seekTo(time)));
   }
 
   public dispose(): Promise<any> {
     return new Promise((resolve, reject) => {
-      try {
-        this.player.release();
+        this.player && this.player.release();
+        this.player = null;
         resolve();
-      } catch (ex) {
-        reject(ex);
-      }
     });
   }
 
@@ -210,18 +93,7 @@ export class TNSPlayer implements TNSPlayerI {
     return this.player.isPlaying();
   }
 
-  public getAudioTrackDuration(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      try {
-        var duration = this.player.getDuration();
-        resolve(duration.toString());
-      } catch (ex) {
-        reject(ex);
-      }
-    });
-  }
-
-  public get currentTime(): number {
-    return this.player ? this.player.getCurrentPosition() : 0;
+  public getDuration(): Promise<number> {
+    return new Promise((resolve, reject) => resolve(this.player.getDuration()));
   }
 }

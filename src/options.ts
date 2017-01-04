@@ -8,27 +8,24 @@ export interface AudioPlayerOptions {
   audioFile: string;
 
   /**
-   * Gets or sets the callback when the currently playing audio file completes.
-   * @returns {Object} An object containing the native values for the callback.
-   */
-  completeCallback?: Function;
-
-  /**
   * Get or sets the player to loop playback.
   */
   loop: boolean;
 
   /**
-   * Gets or sets the callback when an error occurs with the audio player.
-   * @returns {Object} An object containing the native values for the error callback.
+   * The callback when the currently playing audio file completes.
    */
-  errorCallback?: Function;
+  completeCallback?: () => void;
 
   /**
-   * Gets or sets the callback to be invoked to communicate some info and/or warning about the media or its playback.
-   * @returns {Object} An object containing the native values for the info callback.
+   * The callback when an error occurs with the audio player.
    */
-  infoCallback?: Function;
+  errorCallback?: (Error) => void;
+
+  /**
+   * The callback when the playback position is updated.
+   */
+  positionUpdateCallback?: (number) => void;
 }
 
 export interface AudioRecorderOptions {

@@ -1,150 +1,80 @@
-var types_1 = require('utils/types');
-var file_system_1 = require('file-system');
-var utils = require('utils/utils');
+var fs = require('file-system');
+function fixPath(pathStr) {
+    pathStr = pathStr.trim();
+    return (pathStr.indexOf("~/") === 0) ? fs.path.join(fs.knownFolders.currentApp().path, pathStr.replace("~/", "")) : pathStr;
+}
 var TNSPlayer = (function (_super) {
     __extends(TNSPlayer, _super);
     function TNSPlayer() {
         _super.apply(this, arguments);
     }
-    TNSPlayer.prototype.playFromFile = function (options) {
+    Object.defineProperty(TNSPlayer.prototype, "ios", {
+        get: function () {
+            return this.player;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    TNSPlayer.prototype.playFile = function (options) {
         var _this = this;
+        this.dispose().catch(function () { });
         return new Promise(function (resolve, reject) {
-            try {
-                AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
-                AVAudioSession.sharedInstance().setActiveError(true);
-                var audioPath = void 0;
-                var fileName = types_1.isString(options.audioFile) ? options.audioFile.trim() : "";
-                if (fileName.indexOf("~/") === 0) {
-                    fileName = file_system_1.path.join(file_system_1.knownFolders.currentApp().path, fileName.replace("~/", ""));
-                }
-                _this._completeCallback = options.completeCallback;
-                _this._errorCallback = options.errorCallback;
-                _this._infoCallback = options.infoCallback;
-                _this._player = AVAudioPlayer.alloc().initWithContentsOfURLError(NSURL.fileURLWithPath(fileName));
-                _this._player.delegate = _this;
-                if (options.loop) {
-                    _this._player.numberOfLoops = -1;
-                }
-                _this._player.play();
-                resolve();
-            }
-            catch (ex) {
-                if (_this._errorCallback) {
-                    _this._errorCallback({ ex: ex });
-                }
-                reject(ex);
-            }
+            _this._playReject = reject;
+            _this._playResolve = resolve;
+            _this._completeCallback = options.completeCallback;
+            _this._errorCallback = options.errorCallback;
+            _this._infoCallback = options.positionUpdateCallback;
+            _this.player = AVPlayer.alloc().initWithURL(NSURL.URLWithString(fixPath(options.audioFile)));
+            if (options.positionUpdateCallback)
+                _this.player.addPeriodicTimeObserverForIntervalQueueUsingBlock(CMTimeMakeWithSeconds(1, 1), null, function (time) { return options.positionUpdateCallback && options.positionUpdateCallback(CMTimeGetSeconds(time)); });
+            _this.player.currentItem.addObserverForKeyPathOptionsContext(_this, "status", 4, null);
+            _this.player.play();
         });
     };
-    TNSPlayer.prototype.playFromUrl = function (options) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                AVAudioSession.sharedInstance().setCategoryError(AVAudioSessionCategoryPlayback);
-                AVAudioSession.sharedInstance().setActiveError(true);
-                _this._completeCallback = options.completeCallback;
-                _this._errorCallback = options.errorCallback;
-                _this._infoCallback = options.infoCallback;
-                _this._player = AVPlayer.alloc().initWithURL(NSURL.URLWithString(options.audioFile));
-                _this._player.delegate = _this;
-                _this._player.numberOfLoops = options.loop ? -1 : 0;
-                _this._player.play();
-                resolve();
+    TNSPlayer.prototype.observeValueForKeyPathOfObjectChangeContext = function (keypath, source, change, context) {
+        if (this._playResolve && this._playReject && keypath == "status") {
+            if (this.player.currentItem.status == 1) {
+                this._playResolve();
+                this._playResolve = this._playReject = null;
             }
-            catch (ex) {
-                if (_this._errorCallback) {
-                    _this._errorCallback({ ex: ex });
-                }
-                reject(ex);
+            else if (this.player.currentItem.status == 2) {
+                this._playReject(this.player.error);
+                this._playResolve = this._playReject = null;
             }
-        });
+        }
     };
     TNSPlayer.prototype.pause = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                if (_this._player && _this._player.playing) {
-                    _this._player.pause();
-                    resolve(true);
-                }
-            }
-            catch (ex) {
-                if (_this._errorCallback) {
-                    _this._errorCallback({ ex: ex });
-                }
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.pause()); });
     };
     TNSPlayer.prototype.play = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                if (!_this.isAudioPlaying()) {
-                    _this._player.play();
-                    resolve(true);
-                }
-            }
-            catch (ex) {
-                if (_this._errorCallback) {
-                    _this._errorCallback({ ex: ex });
-                }
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.play()); });
     };
     TNSPlayer.prototype.resume = function () {
-        this._player.play();
+        return this.play();
     };
     TNSPlayer.prototype.seekTo = function (time) {
-        var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                if (_this._player) {
-                    _this._player.currentTime = time;
-                    resolve(true);
-                }
-            }
-            catch (ex) {
-                reject(ex);
-            }
-        });
+        return Promise.reject(null);
     };
     TNSPlayer.prototype.dispose = function () {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            try {
-                _this._player.stop();
-                _this._player.release();
-                _this._player = undefined;
-                AVAudioSession.sharedInstance().setActiveError(false);
-                resolve();
+            if (_this.player) {
+                _this.player.pause();
+                _this.player.currentItem.removeObserverForKeyPath(_this, "status");
+                _this.player.replaceCurrentItemWithPlayerItem(null);
             }
-            catch (ex) {
-                if (_this._errorCallback) {
-                    _this._errorCallback({ ex: ex });
-                }
-                reject(ex);
-            }
+            _this.player = null;
+            resolve();
         });
     };
     TNSPlayer.prototype.isAudioPlaying = function () {
-        return this._player ? this._player.playing : false;
+        return (this.player.rate != 0) && (this.player.error == null);
     };
-    TNSPlayer.prototype.getAudioTrackDuration = function () {
+    TNSPlayer.prototype.getDuration = function () {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            try {
-                var duration = _this._player ? _this._player.duration : 0;
-                resolve(duration.toString());
-            }
-            catch (ex) {
-                if (_this._errorCallback) {
-                    _this._errorCallback({ ex: ex });
-                }
-                reject(ex);
-            }
-        });
+        return new Promise(function (resolve, reject) { return resolve(_this.player.currentItem.duration); });
     };
     TNSPlayer.prototype.audioPlayerDidFinishPlayingSuccessfully = function (player, flag) {
         if (flag && this._completeCallback) {
@@ -156,12 +86,11 @@ var TNSPlayer = (function (_super) {
     };
     Object.defineProperty(TNSPlayer.prototype, "currentTime", {
         get: function () {
-            return this._player ? this._player.currentTime : 0;
+            return CMTimeGetSeconds(this.player.currentTime());
         },
         enumerable: true,
         configurable: true
     });
-    TNSPlayer.ObjCProtocols = [AVAudioPlayerDelegate];
     return TNSPlayer;
 }(NSObject));
 exports.TNSPlayer = TNSPlayer;

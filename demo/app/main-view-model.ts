@@ -177,7 +177,7 @@ export class AudioDemo extends Observable {
 
   /***** AUDIO PLAYER *****/
 
-  public playAudio(filepath: string, fileType: string) {
+  public playAudio(filepath: string) {
 
     try {
       var playerOptions = {
@@ -210,21 +210,12 @@ export class AudioDemo extends Observable {
 
       this.set("isPlaying", true);
 
-      if (fileType === 'localFile') {
-        this.player.playFromFile(playerOptions).then(() => {
+        this.player.playFile(playerOptions).then(() => {
           this.set("isPlaying", true);
         }, (err) => {
           console.log(err);
           this.set("isPlaying", false);
         });
-      } else if (fileType === 'remoteFile') {
-        this.player.playFromUrl(playerOptions).then(() => {
-          this.set("isPlaying", true);
-        }, (err) => {
-          console.log(err);
-          this.set("isPlaying", false);
-        });
-      }
     } catch (ex) {
       console.log(ex);
     }
@@ -239,13 +230,13 @@ export class AudioDemo extends Observable {
     console.log('playRemoteFile');
     var filepath = 'http://www.noiseaddicts.com/samples_1w72b820/2514.mp3';
 
-    this.playAudio(filepath, 'remoteFile');
+    this.playAudio(filepath);
 
   }
 
 
   public resumePlayer() {
-    console.log(JSON.stringify(this.player));
+    console.log('resume');
     this.player.resume();
   }
 
@@ -255,7 +246,7 @@ export class AudioDemo extends Observable {
   public playLocalFile(args) {
     let filepath = '~/audio/angel.mp3';
 
-    this.playAudio(filepath, 'localFile');
+    this.playAudio(filepath);
 
   }
 
